@@ -16,7 +16,7 @@ Technologies:
 1. Clone the repository:
 
 ```bash
-git clone <repo_url>
+git clone https://github.com/Vodichka500/fonbet-parser
 cd fonbet-parser
 
 ```
@@ -174,8 +174,10 @@ Parsing completed successfully!
 ## SCREENSHOTS
 
 1. Main Page
+![dashboard](https://github.com/user-attachments/assets/437658e5-04e6-4b1e-9929-10b6ddda97db)
 
 2. Logs Page
+![logs](https://github.com/user-attachments/assets/fa4e38fa-f455-4cfc-9a19-c3c0805cc97b)
 
 
 
