@@ -81,13 +81,11 @@ class ParseMatchesInteractiveCommand extends Command
         $seconds = (float)$interval * 3600;
         $output->writeln("<comment>Parser will run every {$interval} hours...</comment>");
 
-        // Запуск периодического парсинга
+        // Start looped parsing
         $loop->addPeriodicTimer($seconds, function () use ($days, $tournamentName, $teamName, $statusCode, $output, $source, $interval) {
             $this->runParser($days, $tournamentName, $teamName, $statusCode, $output, $source);
             $output->writeln("<comment>Next parse in {$interval} hours...</comment>");
         });
-
-        // Первый запуск сразу
         $this->runParser($days, $tournamentName, $teamName, $statusCode, $output, $source);
         $loop->run();
 

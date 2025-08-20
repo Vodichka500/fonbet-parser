@@ -52,6 +52,8 @@ class FonbetParserService
         ?OutputInterface $output = null
     )
     {
+
+        // INIT LOG FUNCTION
         $log = function(string $message) use ($output) {
             if ($output) {
                 $output->writeln($message);
@@ -68,15 +70,17 @@ class FonbetParserService
 
             file_put_contents($logFile, date('Y-m-d H:i:s') . ' ' . $message . PHP_EOL, FILE_APPEND);
         };
+
         $log("=== Start parsing matches ===");
 
+        // CALCULATE DATES TO FETCH
         $now = new \DateTime();
         $datesToFetch = [];
-
         for ($i = $days - 1; $i >= 0; $i--) {
             $datesToFetch[] = (clone $now)->modify("-$i days")->format('Y-m-d');
         }
 
+        // DOWNLOAD DATA FROM API
         try {
             $allData = $this->fetchDataFromFonbet($datesToFetch);
             $log("Data successfully downloaded from Fonbet");
@@ -85,6 +89,7 @@ class FonbetParserService
             return;
         }
 
+        // GET ESPORTS CATEGORY ID
         try {
             $esportsId = $this->getEsportsCategotyId($allData);
             $log("Successfully founded Esport category ID");
@@ -93,6 +98,7 @@ class FonbetParserService
             return;
         }
 
+        // GET FILTERED COMPETITIONS
         try {
             $competitions = $this->filterCompetitions($allData, (int)$esportsId, $tournamentName);
             $log("Successfully filtered competitions");
@@ -101,6 +107,7 @@ class FonbetParserService
             return;
         }
 
+        // GET FILTERED EVENTS
         try {
             $events = $this->filterEvents($allData, $teamName, $status, $competitions);
             $log("Successfully filtered events");
@@ -109,12 +116,15 @@ class FonbetParserService
             return;
         }
 
+        // GET FILTERED MISCS
         $eventMiscs = $this->filterEventMiscs($allData, $events);
 
         $log("=== End parsing matches ===");
+
         $log("=== Start saving matches to local DB ===");
 
         foreach ($events as $event){
+            // SKIP IF EVENT HAS NO COMPETITION
             $competitionData = $competitions[$event->competitionId] ?? null;
             if (!$competitionData) continue;
 
@@ -122,12 +132,17 @@ class FonbetParserService
                 continue;
             }
 
+            // WHEN STATUS IS 2, EVENT MUST HAVE EVENT_MISCS
             if ((int) $event->status === 2 && !isset($eventMiscs[$event->id]) ) {
                 continue;
             }
 
             $eventMiscsData = $eventMiscs[$event->id] ?? null;
+
+
             try {
+
+                // SAVE OR FIND TOURNAMENT
                 $tournamentDB =$this->em->getRepository(Tournaments::class)->findOneBy(['name' => strtolower($competitionData->name)]);
                 if(!$tournamentDB){
                     $tournamentDB = new Tournaments();
@@ -136,6 +151,7 @@ class FonbetParserService
                     $this->em->flush();
                 }
 
+                // SAVE OR FIND TEAM1
                 $team1DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team1)]);
                 if(!$team1DB){
                     $team1DB = new Teams();
@@ -144,6 +160,7 @@ class FonbetParserService
                     $this->em->flush();
                 }
 
+                // SAVE OR FIND TEAM2
                 $team2DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team2)]);
                 if(!$team2DB){
                     $team2DB = new Teams();
@@ -152,6 +169,7 @@ class FonbetParserService
                     $this->em->flush();
                 }
 
+                // SAVE OR FIND MATCH
                 $matchDB = $this->em->getRepository(Matches::class)->findOneBy(['source_id' => $event->id]);
                 if(!$matchDB){
                     $matchDB = new Matches();
@@ -173,8 +191,7 @@ class FonbetParserService
                     $this->em->flush();
                 }
 
-                // Добавляем SubMatches
-
+                // SAVE OR FIND SUBMATCH
                 if (!empty($eventMiscsData->subScores)) {
                     foreach ($eventMiscsData->subScores as $subScoreDTO) {
                         $subMatch = $this->em->getRepository(SubMatches::class)
@@ -201,18 +218,12 @@ class FonbetParserService
                 $log("<error>Error processing event {$event->id}: " . $e->getMessage() . "</error>");
                 continue;
             }
-
-            //echo $tournamentDB->getName() . "<br>";
-            //echo $team1DB->getName() . "<br>";
-            //echo $team2DB->getName() . "<br>";
-            //echo $matchDB->getTeam1()->getName() . " " . $matchDB->getScore1()
-            //    . " VS " . $matchDB->getScore2() . " " . $matchDB->getTeam2()->getName() . "<br>";
-
         }
         $log("=== End saving matches to local DB ===");
     }
 
     /**
+     * FETCH AND MERGE DATA FROM ALL Dates IN datesToFetch
      * @param string[] $datesToFetch
      */
     private function fetchDataFromFonbet(array $datesToFetch)
@@ -244,7 +255,7 @@ class FonbetParserService
             $existingEventMiscsIds = array_column($allData['eventMiscs'], 'id');
 
 
-            // Добавляем только новые sports
+            // ADD ONLY NEW sports
             if (!empty($data['sports'])) {
                 foreach ($data['sports'] as $sport) {
                     if (!in_array($sport['id'], $existingSportIds)) {
@@ -254,7 +265,7 @@ class FonbetParserService
                 }
             }
 
-            // Добавляем только новые competitions
+            // ADD ONLY NEW competitions
             if (!empty($data['competitions'])) {
                 foreach ($data['competitions'] as $competition) {
                     if (!in_array($competition['id'], $existingCompetitionIds)) {
@@ -264,6 +275,7 @@ class FonbetParserService
                 }
             }
 
+            // ADD ONLY NEW events
             if (!empty($data['events'])) {
                 foreach ($data['events'] as $event) {
                     if (!in_array($event['id'], $existingEventIds)) {
@@ -273,6 +285,7 @@ class FonbetParserService
                 }
             }
 
+            // ADD ONLY NEW eventMiscs
             if (!empty($data['eventMiscs'])) {
                 foreach ($data['eventMiscs'] as $eventMiscs) {
                     if (!in_array($eventMiscs['id'], $existingEventMiscsIds)) {
@@ -286,6 +299,11 @@ class FonbetParserService
         return $allData;
     }
 
+    /**
+     * RETURN CATEGORY ID OF ESPORTS IN FONFET SYSTEM
+     * @param array $allData
+     * @return int
+     */
     private function getEsportsCategotyId(array $allData)
     {
         $esportsId = null;
@@ -307,6 +325,15 @@ class FonbetParserService
         return $esportsId;
     }
 
+
+    /**
+     * FILTER COMPETITIONS AND GET ONLY CONNECTED WITH ESPORTS (CS2 and DOTA) AND BY TOURNAMENT NAME IF PROPERTY EXIST)
+     *
+     * @param array $allData
+     * @param int $esportsId
+     * @param string|null $tournamentName
+     * @return array
+     */
     private function filterCompetitions(array $allData, int $esportsId, string | null $tournamentName): array
     {
         $competitions = [];
@@ -354,6 +381,15 @@ class FonbetParserService
         return $competitions;
     }
 
+    /**
+     * FILTER EVENTS AND GET ONLY CONNECTED WITH EXISTING COMPETITIONS AND BY TEAMNAME AND BY STATUS IF PROPERTY EXIST)
+     *
+     * @param array $allData
+     * @param string|null $teamName
+     * @param string|null $status
+     * @param array $competitions
+     * @return array
+     */
     private function filterEvents(array $allData, string | null $teamName, string | null $status, array $competitions)
     {
         $events = [];
@@ -376,6 +412,14 @@ class FonbetParserService
         return $events;
     }
 
+
+    /**
+     * FILTER EVENTS AND GET ONLY CONNECTED WITH EXISTING EVENTS
+     *
+     * @param array $allData
+     * @param array $events
+     * @return array
+     */
     private function filterEventMiscs(array $allData, array $events)
     {
         $eventMiscs = [];
