@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Service\FonbetParserService;
+use Psr\Log\LoggerInterface;
 use React\EventLoop\Loop;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -15,11 +16,13 @@ use Symfony\Component\Console\Question\ChoiceQuestion;
 class ParseMatchesInteractiveCommand extends Command
 {
     private FonbetParserService $parserService;
+    private LoggerInterface $logger;
 
-    public function __construct(FonbetParserService $parserService)
+    public function __construct(FonbetParserService $parserService, LoggerInterface $logger)
     {
         parent::__construct();
         $this->parserService = $parserService;
+        $this->logger = $logger;
     }
 
     protected function configure(): void
@@ -79,12 +82,12 @@ class ParseMatchesInteractiveCommand extends Command
 
         $loop = Loop::get();
         $seconds = (float)$interval * 3600;
-        $output->writeln("<comment>Parser will run every {$interval} hours...</comment>");
+        $this->logger->info("Parser will run every {$interval} hours..");
 
         // Start looped parsing
         $loop->addPeriodicTimer($seconds, function () use ($days, $tournamentName, $teamName, $statusCode, $output, $source, $interval) {
             $this->runParser($days, $tournamentName, $teamName, $statusCode, $output, $source);
-            $output->writeln("<comment>Next parse in {$interval} hours...</comment>");
+            $this->logger->info("Next parse in {$interval} hours...");
         });
         $this->runParser($days, $tournamentName, $teamName, $statusCode, $output, $source);
         $loop->run();
@@ -97,14 +100,13 @@ class ParseMatchesInteractiveCommand extends Command
         try {
             if ($source === 'Fonbet') {
                 $this->parserService->parseMatchesFromFonbet($days, $tournamentName, $teamName, $statusCode, $output);
-                $output->writeln("<info>Parsing completed successfully!</info>");
+                $this->logger->info("Parsing completed successfully!");
                 return Command::SUCCESS;
             }
-
-            $output->writeln('<error>Invalid source selected.</error>');
+            $this->logger->error("Invalid source selected.");
             return Command::INVALID;
         } catch (\Throwable $e) {
-            $output->writeln('<error>Error: ' . $e->getMessage() . '</error>');
+            $this->logger->error("Error: " . $e->getMessage());
             return Command::FAILURE;
         }
     }
