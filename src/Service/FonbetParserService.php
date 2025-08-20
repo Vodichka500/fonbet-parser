@@ -52,25 +52,7 @@ class FonbetParserService
         ?OutputInterface $output = null
     )
     {
-
-        // INIT LOG FUNCTION
-        $log = function(string $message) use ($output) {
-            if ($output) {
-                $output->writeln($message);
-            } else {
-                echo $message . PHP_EOL;
-            }
-
-            $logDir = realpath(__DIR__ . '/../../var/log'); // поднимаемся на 2 уровня вверх
-            if (!$logDir) {
-                $logDir = __DIR__ . '/../../var/log';
-                mkdir($logDir, 0777, true);
-            }
-            $logFile = $logDir . '/parser.log';
-
-            file_put_contents($logFile, date('Y-m-d H:i:s') . ' ' . $message . PHP_EOL, FILE_APPEND);
-        };
-        $log("=== Start parsing matches ===");
+        $this->logger->info('=== Start parsing matches ===');
 
         // CALCULATE DATES TO FETCH
         $now = new \DateTime();
@@ -80,50 +62,51 @@ class FonbetParserService
         }
 
         foreach ($datesToFetch as $lineDate) {
-            $log("=== Processing date: $lineDate ===");
+
+            $this->logger->info("=== Processing date: $lineDate ===");
 
             // DOWNLOAD DATA FROM API
             try {
                 $data = $this->fetchDataFromFonbet($lineDate);
-                $log("Data successfully downloaded from Fonbet");
+                $this->logger->info("Data successfully downloaded from Fonbet");
             } catch (\Throwable $e) {
-                $log("<error> Error loading data from fonbet: " . $e->getMessage() . "</error>");
+                $this->logger->error("Error loading data from Fonbet: " . $e->getMessage());
                 return;
             }
 
             // GET ESPORTS CATEGORY ID
             try {
                 $esportsId = $this->getEsportsCategotyId($data);
-                $log("Successfully found Esport category ID for date $lineDate");
+                $this->logger->info("Successfully found Esport category ID for date $lineDate");
             } catch (\Throwable $e) {
-                $log("<error>Error finding Esport category ID for date {$lineDate}: " . $e->getMessage() . "</error>");
+                $this->logger->error("Error finding Esport category ID for date {$lineDate}: " . $e->getMessage());
                 return;
             }
 
             // GET FILTERED COMPETITIONS
             try {
                 $competitions = $this->filterCompetitions($data, (int)$esportsId, $tournamentName);
-                $log("Successfully filtered competitions");
+                $this->logger->info("Successfully filtered competitions");
             } catch (\Throwable $e) {
-                $log("<error> Error with filtering competitions:  " . $e->getMessage() . "</error>");
+                $this->logger->error("Error with filtering competitions: " . $e->getMessage());
                 return;
             }
 
             // GET FILTERED EVENTS
             try {
                 $events = $this->filterEvents($data, $teamName, $status, $competitions);
-                $log("Successfully filtered events");
+                $this->logger->info("Successfully filtered events");
             } catch (\Throwable $e) {
-                $log("<error> Error with filtering events: " . $e->getMessage() . "</error>");
+                $this->logger->error("Error with filtering events: " . $e->getMessage());
                 return;
             }
 
             // GET FILTERED MISCS
             $eventMiscs = $this->filterEventMiscs($data, $events);
 
-            $log("=== End processing date: $lineDate ===");
+            $this->logger->info("=== End processing date: $lineDate ===");
 
-            $log("=== Start saving matches from $lineDate to local DB  ===");
+            $this->logger->info("=== Start saving matches from $lineDate to local DB ===");
 
             foreach ($events as $event){
                 // SKIP IF EVENT HAS NO COMPETITION
@@ -217,13 +200,13 @@ class FonbetParserService
                         $this->em->flush();
                     }
 
-                    $log("Successfully processed event {$event->id}");
+                    $this->logger->info("Successfully processed event {$event->id}");
                 } catch (\Throwable $e) {
-                    $log("<error>Error processing event {$event->id}: " . $e->getMessage() . "</error>");
+                    $this->logger->error("Error processing event {$event->id}: " . $e->getMessage());
                     continue;
                 }
             }
-            $log("=== End saving matches to local DB ===");
+            $this->logger->info("=== End saving matches to local DB ===");
         }
     }
 

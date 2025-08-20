@@ -14,7 +14,7 @@ class ParserController extends AbstractController
     public function home(MatchesRepository $matchesRepository): Response
     {
         $matches = $matchesRepository->getAllMatches();
-        $logFile = dirname(__DIR__, 2) . '/var/log/parser.log';
+        $logFile = dirname(__DIR__, 2) . '/var/log/dev.log';
         $logs = [];
         if (file_exists($logFile)) {
             $logs = file($logFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);

@@ -12,7 +12,7 @@ final class LogsController extends AbstractController
     #[Route('/logs/clear', name: 'clear_logs', methods: ['POST'])]
     public function clearLogs(): JsonResponse
     {
-        $logFile = $this->getParameter('kernel.project_dir') . '/var/log/parser.log';
+        $logFile = $this->getParameter('kernel.project_dir') . '/var/log/dev.log';
 
         if (file_exists($logFile)) {
             file_put_contents($logFile, ""); // очистка файла
