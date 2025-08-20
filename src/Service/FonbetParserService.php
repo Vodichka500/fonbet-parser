@@ -58,6 +58,15 @@ class FonbetParserService
             } else {
                 echo $message . PHP_EOL;
             }
+
+            $logDir = realpath(__DIR__ . '/../../var/log'); // поднимаемся на 2 уровня вверх
+            if (!$logDir) {
+                $logDir = __DIR__ . '/../../var/log';
+                mkdir($logDir, 0777, true);
+            }
+            $logFile = $logDir . '/parser.log';
+
+            file_put_contents($logFile, date('Y-m-d H:i:s') . ' ' . $message . PHP_EOL, FILE_APPEND);
         };
         $log("=== Start parsing matches ===");
 
@@ -165,15 +174,24 @@ class FonbetParserService
                 }
 
                 // Добавляем SubMatches
+
                 if (!empty($eventMiscsData->subScores)) {
                     foreach ($eventMiscsData->subScores as $subScoreDTO) {
-                        $subMatch = new SubMatches();
-                        $subMatch->setScore1($subScoreDTO->score1);
-                        $subMatch->setScore2($subScoreDTO->score2);
-                        $subMatch->setTitle($subScoreDTO->title);
-                        $subMatch->setMatch($matchDB);
+                        $subMatch = $this->em->getRepository(SubMatches::class)
+                            ->findOneBy([
+                                'source_id' => $subScoreDTO->scoreIndex,
+                                'match' => $matchDB->getId(),
+                            ]);
+                        if(!$subMatch){
+                            $subMatch = new SubMatches();
+                            $subMatch->setSourceId($subScoreDTO->scoreIndex);
+                            $subMatch->setScore1($subScoreDTO->score1);
+                            $subMatch->setScore2($subScoreDTO->score2);
+                            $subMatch->setTitle($subScoreDTO->title);
+                            $subMatch->setMatch($matchDB);
 
-                        $this->em->persist($subMatch);
+                            $this->em->persist($subMatch);
+                        }
                     }
                     $this->em->flush();
                 }

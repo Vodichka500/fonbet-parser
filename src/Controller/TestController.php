@@ -15,7 +15,7 @@ class TestController extends AbstractController
     {
         $this->parser = $parser;
     }
-    #[\Symfony\Component\Routing\Annotation\Route('/test_parser', name: 'test_parser')]
+    #[Route('/test_parser', name: 'test_parser')]
     public function test(): Response
     {
         $data = $this->parser->parseMatches(2); // дата для примера

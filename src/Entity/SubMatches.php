@@ -14,7 +14,8 @@ class SubMatches
     #[ORM\Column]
     private ?int $id = null;
 
-
+    #[ORM\Column(length: 255)]
+    private ?string $source_id = null;
 
     #[ORM\Column(type: Types::SMALLINT)]
     private ?int $score1 = null;
@@ -32,6 +33,18 @@ class SubMatches
     public function getId(): ?int
     {
         return $this->id;
+    }
+
+    public function getSourceId(): ?string
+    {
+        return $this->source_id;
+    }
+
+    public function setSourceId(string $source_id): static
+    {
+        $this->source_id = $source_id;
+
+        return $this;
     }
 
     public function getScore1(): ?int

@@ -73,6 +73,8 @@
       <path value="$PROJECT_DIR$/vendor/react/event-loop" />
       <path value="$PROJECT_DIR$/vendor/symfony/asset" />
       <path value="$PROJECT_DIR$/vendor/symfony/webpack-encore-bundle" />
+      <path value="$PROJECT_DIR$/vendor/symfony/stimulus-bundle" />
+      <path value="$PROJECT_DIR$/vendor/symfony/ux-react" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.2" />

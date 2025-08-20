@@ -55,7 +55,7 @@ class Matches
     /**
      * @var Collection<int, SubMatches>
      */
-    #[ORM\OneToMany(targetEntity: SubMatches::class, mappedBy: 'match_id', orphanRemoval: true)]
+    #[ORM\OneToMany(targetEntity: SubMatches::class, mappedBy: 'match', orphanRemoval: true)]
     private Collection $subMatches;
 
     public function __construct()
@@ -204,7 +204,7 @@ class Matches
     {
         if (!$this->subMatches->contains($subMatch)) {
             $this->subMatches->add($subMatch);
-            $subMatch->setMatchId($this);
+            $subMatch->setMatch($this);
         }
 
         return $this;
@@ -214,8 +214,8 @@ class Matches
     {
         if ($this->subMatches->removeElement($subMatch)) {
             // set the owning side to null (unless already changed)
-            if ($subMatch->getMatchId() === $this) {
-                $subMatch->setMatchId(null);
+            if ($subMatch->getMatch() === $this) {
+                $subMatch->setMatch(null);
             }
         }
 
