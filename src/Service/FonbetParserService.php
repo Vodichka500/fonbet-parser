@@ -139,7 +139,6 @@ class FonbetParserService
 
             $eventMiscsData = $eventMiscs[$event->id] ?? null;
 
-
             try {
 
                 // SAVE OR FIND TOURNAMENT
@@ -186,6 +185,9 @@ class FonbetParserService
                         $eventMiscsData && !empty($eventMiscsData->subScores)
                             ? count($eventMiscsData->subScores)
                             : 1
+                    );
+                    $matchDB->setMatchDate(
+                        (new \DateTimeImmutable('@' . $event->startTime))->setTimezone(new \DateTimeZone('UTC'))
                     );
                     $this->em->persist($matchDB);
                     $this->em->flush();

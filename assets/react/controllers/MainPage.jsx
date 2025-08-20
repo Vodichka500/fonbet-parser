@@ -36,8 +36,10 @@ export default function ({ matches, logs }) {
 
         // Sort by match ID as a proxy for date (assuming higher ID = more recent)
         filtered.sort((a, b) => {
-            return sortOrder === "desc" ? b.id - a.id : a.id - b.id
-        })
+            const dateA = new Date(a.match_date);
+            const dateB = new Date(b.match_date);
+            return sortOrder === "desc" ? dateB - dateA : dateA - dateB;
+        });
 
         return filtered
     }, [matches, searchTerm, selectedTournament, selectedDiscipline, sortOrder])
@@ -162,7 +164,8 @@ export default function ({ matches, logs }) {
                                         <div className="tournament-info">
                                             <h3 className="tournament-name">{match.tournament.name}</h3>
                                             <div className="match-meta">
-                                                {match.discipline} • {match.match_format.toUpperCase()}
+                                                {match.discipline} • {match.match_format.toUpperCase()} •{" "}
+                                                {new Date(match.match_date).toLocaleString()}
                                             </div>
                                         </div>
                                         <div className={`status ${match.status.toLowerCase()}`}>{match.status}</div>

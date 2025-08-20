@@ -52,6 +52,9 @@ class Matches
     #[ORM\Column(type: Types::SMALLINT)]
     private ?int $submatches_number = null;
 
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $match_date = null;
+
     /**
      * @var Collection<int, SubMatches>
      */
@@ -219,6 +222,17 @@ class Matches
             }
         }
 
+        return $this;
+    }
+
+    public function getMatchDate(): ?\DateTimeInterface
+    {
+        return $this->match_date;
+    }
+
+    public function setMatchDate(?\DateTimeInterface $matchDate): self
+    {
+        $this->match_date = $matchDate;
         return $this;
     }
 }
