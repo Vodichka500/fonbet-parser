@@ -1,0 +1,2 @@
+# Example: Every Minute
+* * * * * /usr/local/bin/php /var/www/bin/console app:parse-matches --source=Fonbet --days=1 >> /var/www/var/log/parser.log 2>&1
