@@ -13,6 +13,7 @@ use App\Entity\Tournaments;
 use App\Enum\MatchStatus;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class TournamentListItem
@@ -43,14 +44,22 @@ class FonbetParserService
         $this->logger = $logger;
     }
 
-    public function parseMatches(
+    public function parseMatchesFromFonbet(
         int $days = 1,
         ?string $tournamentName = null,
         ?string $teamName = null,
         ?string $status = null,
+        ?OutputInterface $output = null
     )
     {
-        $this->logger->info("=== Start parsing matches ===");
+        $log = function(string $message) use ($output) {
+            if ($output) {
+                $output->writeln($message);
+            } else {
+                echo $message . PHP_EOL;
+            }
+        };
+        $log("=== Start parsing matches ===");
 
         $now = new \DateTime();
         $datesToFetch = [];
@@ -61,40 +70,40 @@ class FonbetParserService
 
         try {
             $allData = $this->fetchDataFromFonbet($datesToFetch);
-            $this->logger->info("Data successfully downloaded from Fonbet");
+            $log("Data successfully downloaded from Fonbet");
         } catch (\Throwable $e) {
-            $this->logger->error("Error loading data from fonbet: " . $e->getMessage());
+            $log("<error> Error loading data from fonbet: " . $e->getMessage() . "</error>");
             return;
         }
 
         try {
             $esportsId = $this->getEsportsCategotyId($allData);
-            $this->logger->info("Successfully founded Esport category ID");
+            $log("Successfully founded Esport category ID");
         } catch (\Throwable $e) {
-            $this->logger->error("Error with founding Esport category ID: " . $e->getMessage());
+            $log("<error> Error with founding Esport category ID " . $e->getMessage() . "</error>");
             return;
         }
 
         try {
             $competitions = $this->filterCompetitions($allData, (int)$esportsId, $tournamentName);
-            $this->logger->info("Successfully filtered competitions");
+            $log("Successfully filtered competitions");
         } catch (\Throwable $e) {
-            $this->logger->error("Error with filtering competitions: " . $e->getMessage());
+            $log("<error> Error with filtering competitions:  " . $e->getMessage() . "</error>");
             return;
         }
 
         try {
             $events = $this->filterEvents($allData, $teamName, $status, $competitions);
-            $this->logger->info("Successfully filtered events");
+            $log("Successfully filtered events");
         } catch (\Throwable $e) {
-            $this->logger->error("Error with filtering events: " . $e->getMessage());
+            $log("<error> Error with filtering events: " . $e->getMessage() . "</error>");
             return;
         }
 
         $eventMiscs = $this->filterEventMiscs($allData, $events);
 
-        $this->logger->info("=== End parsing matches ===");
-        $this->logger->info("=== Start saving matches to local DB ===");
+        $log("=== End parsing matches ===");
+        $log("=== Start saving matches to local DB ===");
 
         foreach ($events as $event){
             $competitionData = $competitions[$event->competitionId] ?? null;
@@ -109,74 +118,80 @@ class FonbetParserService
             }
 
             $eventMiscsData = $eventMiscs[$event->id] ?? null;
-
-            $tournamentDB =$this->em->getRepository(Tournaments::class)->findOneBy(['name' => strtolower($competitionData->name)]);
-            if(!$tournamentDB){
-                $tournamentDB = new Tournaments();
-                $tournamentDB->setName(strtolower($competitionData->name));
-                $this->em->persist($tournamentDB);
-                $this->em->flush();
-            }
-
-            $team1DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team1)]);
-            if(!$team1DB){
-                $team1DB = new Teams();
-                $team1DB->setName(strtolower($event->team1));
-                $this->em->persist($team1DB);
-                $this->em->flush();
-            }
-
-            $team2DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team2)]);
-            if(!$team2DB){
-                $team2DB = new Teams();
-                $team2DB->setName(strtolower($event->team2));
-                $this->em->persist($team2DB);
-                $this->em->flush();
-            }
-
-            $matchDB = $this->em->getRepository(Matches::class)->findOneBy(['source_id' => $event->id]);
-            if(!$matchDB){
-                $matchDB = new Matches();
-                $matchDB->setSourceId($event->id);
-                $matchDB->setDiscipline(strtolower($competitionData->discipline_name));
-                $matchDB->setMatchFormat(strtolower($competitionData->match_format));
-                $matchDB->setScore1($eventMiscsData->score1 ?? null);
-                $matchDB->setScore2($eventMiscsData->score2 ?? null);
-                $matchDB->setTeam1($team1DB);
-                $matchDB->setTeam2($team2DB);
-                $matchDB->setStatus(MatchStatus::fromEventStatus(intval($event->status)));
-                $matchDB->setTournament($tournamentDB);
-                $matchDB->setSubmatchesNumber(
-                    $eventMiscsData && !empty($eventMiscsData->subScores)
-                        ? count($eventMiscsData->subScores)
-                        : 1
-                );
-                $this->em->persist($matchDB);
-                $this->em->flush();
-            }
-
-            // Добавляем SubMatches
-            if (!empty($eventMiscsData->subScores)) {
-                foreach ($eventMiscsData->subScores as $subScoreDTO) {
-                    $subMatch = new SubMatches();
-                    $subMatch->setScore1($subScoreDTO->score1);
-                    $subMatch->setScore2($subScoreDTO->score2);
-                    $subMatch->setTitle($subScoreDTO->title);
-                    $subMatch->setMatch($matchDB);
-
-                    $this->em->persist($subMatch);
+            try {
+                $tournamentDB =$this->em->getRepository(Tournaments::class)->findOneBy(['name' => strtolower($competitionData->name)]);
+                if(!$tournamentDB){
+                    $tournamentDB = new Tournaments();
+                    $tournamentDB->setName(strtolower($competitionData->name));
+                    $this->em->persist($tournamentDB);
+                    $this->em->flush();
                 }
-                $this->em->flush();
+
+                $team1DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team1)]);
+                if(!$team1DB){
+                    $team1DB = new Teams();
+                    $team1DB->setName(strtolower($event->team1));
+                    $this->em->persist($team1DB);
+                    $this->em->flush();
+                }
+
+                $team2DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team2)]);
+                if(!$team2DB){
+                    $team2DB = new Teams();
+                    $team2DB->setName(strtolower($event->team2));
+                    $this->em->persist($team2DB);
+                    $this->em->flush();
+                }
+
+                $matchDB = $this->em->getRepository(Matches::class)->findOneBy(['source_id' => $event->id]);
+                if(!$matchDB){
+                    $matchDB = new Matches();
+                    $matchDB->setSourceId($event->id);
+                    $matchDB->setDiscipline(strtolower($competitionData->discipline_name));
+                    $matchDB->setMatchFormat(strtolower($competitionData->match_format));
+                    $matchDB->setScore1($eventMiscsData->score1 ?? null);
+                    $matchDB->setScore2($eventMiscsData->score2 ?? null);
+                    $matchDB->setTeam1($team1DB);
+                    $matchDB->setTeam2($team2DB);
+                    $matchDB->setStatus(MatchStatus::fromEventStatus(intval($event->status)));
+                    $matchDB->setTournament($tournamentDB);
+                    $matchDB->setSubmatchesNumber(
+                        $eventMiscsData && !empty($eventMiscsData->subScores)
+                            ? count($eventMiscsData->subScores)
+                            : 1
+                    );
+                    $this->em->persist($matchDB);
+                    $this->em->flush();
+                }
+
+                // Добавляем SubMatches
+                if (!empty($eventMiscsData->subScores)) {
+                    foreach ($eventMiscsData->subScores as $subScoreDTO) {
+                        $subMatch = new SubMatches();
+                        $subMatch->setScore1($subScoreDTO->score1);
+                        $subMatch->setScore2($subScoreDTO->score2);
+                        $subMatch->setTitle($subScoreDTO->title);
+                        $subMatch->setMatch($matchDB);
+
+                        $this->em->persist($subMatch);
+                    }
+                    $this->em->flush();
+                }
+
+                $log("Successfully processed event {$event->id}");
+            } catch (\Throwable $e) {
+                $log("<error>Error processing event {$event->id}: " . $e->getMessage() . "</error>");
+                continue;
             }
 
-
-            echo $tournamentDB->getName() . "<br>";
+            //echo $tournamentDB->getName() . "<br>";
             //echo $team1DB->getName() . "<br>";
             //echo $team2DB->getName() . "<br>";
-            echo $matchDB->getTeam1()->getName() . " " . $matchDB->getScore1()
-                . " VS " . $matchDB->getScore2() . " " . $matchDB->getTeam2()->getName() . "<br>";
+            //echo $matchDB->getTeam1()->getName() . " " . $matchDB->getScore1()
+            //    . " VS " . $matchDB->getScore2() . " " . $matchDB->getTeam2()->getName() . "<br>";
 
         }
+        $log("=== End saving matches to local DB ===");
     }
 
     /**
