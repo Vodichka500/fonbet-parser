@@ -50,6 +50,7 @@ class MatchesRepository extends ServiceEntityRepository
                         'score2' => $sub->getScore2(),
                     ];
                 }, $match->getSubMatches()->toArray()),
+                'match_date' => $match->getMatchDate()?->format('c'), // ISO 8601
             ];
         }
 
