@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
     php:
-        image: php:8.4-fpm
+        build:
+            context: .
+            dockerfile: docker/php/Dockerfile
         container_name: fonbet-php
         working_dir: /var/www
         volumes:
@@ -11,9 +13,6 @@ services:
             - db
         environment:
             SYMFONY_ENV: dev
-        command: php-fpm
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
 
     web:
         image: nginx:alpine
@@ -43,7 +42,7 @@ services:
             MYSQL_USER: fonbet
             MYSQL_PASSWORD: fonbet
         ports:
-            - "3306:3306"
+            - "3307:3306"
         volumes:
             - db_data:/var/lib/mysql
 
