@@ -16,21 +16,6 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class TournamentListItem
-{
-    public string $id;
-    public string $name;
-    public string $discipline_name;
-    public string $match_format;
-
-    public function __construct(string $id, string $name, string $discipline_name, string $match_format){
-        $this->id = $id;
-        $this->name = $name;
-        $this->discipline_name = $discipline_name;
-        $this->match_format = $match_format;
-    }
-}
-
 class FonbetParserService
 {
     private HttpClientInterface $client;
@@ -61,6 +46,8 @@ class FonbetParserService
             $datesToFetch[] = (clone $now)->modify("-$i days")->format('Y-m-d');
         }
 
+        $batchSize = 20;
+        $i = 0;
         foreach ($datesToFetch as $lineDate) {
 
             $this->logger->info("=== Processing date: $lineDate ===");
@@ -132,7 +119,7 @@ class FonbetParserService
                         $tournamentDB = new Tournaments();
                         $tournamentDB->setName(strtolower($competitionData->name));
                         $this->em->persist($tournamentDB);
-                        $this->em->flush();
+                        #$this->em->flush();
                     }
 
                     // SAVE OR FIND TEAM1
@@ -141,7 +128,7 @@ class FonbetParserService
                         $team1DB = new Teams();
                         $team1DB->setName(strtolower($event->team1));
                         $this->em->persist($team1DB);
-                        $this->em->flush();
+                        #$this->em->flush();
                     }
 
                     // SAVE OR FIND TEAM2
@@ -150,7 +137,7 @@ class FonbetParserService
                         $team2DB = new Teams();
                         $team2DB->setName(strtolower($event->team2));
                         $this->em->persist($team2DB);
-                        $this->em->flush();
+                        #$this->em->flush();
                     }
 
                     // SAVE OR FIND MATCH
@@ -175,7 +162,7 @@ class FonbetParserService
                             (new \DateTimeImmutable('@' . $event->startTime))->setTimezone(new \DateTimeZone('UTC'))
                         );
                         $this->em->persist($matchDB);
-                        $this->em->flush();
+                        #$this->em->flush();
                     }
 
                     // SAVE OR FIND SUBMATCH
@@ -197,15 +184,25 @@ class FonbetParserService
                                 $this->em->persist($subMatch);
                             }
                         }
-                        $this->em->flush();
+                        #$this->em->flush();
                     }
 
                     $this->logger->info("Successfully processed event {$event->id}");
+
+                    $this->em->persist($matchDB);
+                    if (($i % $batchSize) === 0) {
+                        $this->em->flush();
+                        $this->em->clear();
+                    }
+                    $i++;
+
                 } catch (\Throwable $e) {
                     $this->logger->error("Error processing event {$event->id}: " . $e->getMessage());
                     continue;
                 }
             }
+            $this->em->flush(); // остаток
+            $this->em->clear();
             $this->logger->info("=== End saving matches to local DB ===");
         }
     }
