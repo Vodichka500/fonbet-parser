@@ -46,7 +46,7 @@ class FonbetParserService
             $datesToFetch[] = (clone $now)->modify("-$i days")->format('Y-m-d');
         }
 
-        $batchSize = 20;
+        $batchSize = 25;
         $i = 0;
         foreach ($datesToFetch as $lineDate) {
 
@@ -95,54 +95,54 @@ class FonbetParserService
 
             $this->logger->info("=== Start saving matches from $lineDate to local DB ===");
 
-            foreach ($events as $event){
-                // SKIP IF EVENT HAS NO COMPETITION
-                $competitionData = $competitions[$event->competitionId] ?? null;
-                if (!$competitionData) continue;
-
-                if (!in_array((int) $event->status, [2, 4], true)) {
-                    continue;
-                }
-
-                // WHEN STATUS IS 2, EVENT MUST HAVE EVENT_MISCS
-                if ((int) $event->status === 2 && !isset($eventMiscs[$event->id]) ) {
-                    continue;
-                }
-
-                $eventMiscsData = $eventMiscs[$event->id] ?? null;
-
+            foreach ($events as $event) {
                 try {
+                    $competitionData = $competitions[$event->competitionId] ?? null;
+                    if (!$competitionData) {
+                        unset($event);
+                        continue;
+                    }
 
-                    // SAVE OR FIND TOURNAMENT
-                    $tournamentDB =$this->em->getRepository(Tournaments::class)->findOneBy(['name' => strtolower($competitionData->name)]);
-                    if(!$tournamentDB){
+                    if (!in_array((int) $event->status, [2, 4], true)) {
+                        unset($event);
+                        continue;
+                    }
+
+                    $eventMiscsData = $eventMiscs[$event->id] ?? null;
+                    if ((int) $event->status === 2 && !$eventMiscsData) {
+                        unset($event);
+                        continue;
+                    }
+
+                    // Поиск или создание сущностей
+                    $tournamentDB = $this->em->getRepository(Tournaments::class)
+                        ->findOneBy(['name' => strtolower($competitionData->name)]);
+                    if (!$tournamentDB) {
                         $tournamentDB = new Tournaments();
                         $tournamentDB->setName(strtolower($competitionData->name));
                         $this->em->persist($tournamentDB);
-                        #$this->em->flush();
                     }
 
-                    // SAVE OR FIND TEAM1
-                    $team1DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team1)]);
-                    if(!$team1DB){
+
+                    $team1DB = $this->em->getRepository(Teams::class)
+                        ->findOneBy(['name' => strtolower($event->team1)]);
+                    if (!$team1DB) {
                         $team1DB = new Teams();
                         $team1DB->setName(strtolower($event->team1));
                         $this->em->persist($team1DB);
-                        #$this->em->flush();
                     }
 
-                    // SAVE OR FIND TEAM2
-                    $team2DB = $this->em->getRepository(Teams::class)->findOneBy(['name' => strtolower($event->team2)]);
-                    if(!$team2DB){
+                    $team2DB = $this->em->getRepository(Teams::class)
+                        ->findOneBy(['name' => strtolower($event->team2)]);
+                    if (!$team2DB) {
                         $team2DB = new Teams();
                         $team2DB->setName(strtolower($event->team2));
                         $this->em->persist($team2DB);
-                        #$this->em->flush();
                     }
 
-                    // SAVE OR FIND MATCH
-                    $matchDB = $this->em->getRepository(Matches::class)->findOneBy(['source_id' => $event->id]);
-                    if(!$matchDB){
+                    $matchDB = $this->em->getRepository(Matches::class)
+                        ->findOneBy(['source_id' => $event->id]);
+                    if (!$matchDB) {
                         $matchDB = new Matches();
                         $matchDB->setSourceId($event->id);
                         $matchDB->setDiscipline(strtolower($competitionData->discipline_name));
@@ -162,10 +162,8 @@ class FonbetParserService
                             (new \DateTimeImmutable('@' . $event->startTime))->setTimezone(new \DateTimeZone('UTC'))
                         );
                         $this->em->persist($matchDB);
-                        #$this->em->flush();
                     }
 
-                    // SAVE OR FIND SUBMATCH
                     if (!empty($eventMiscsData->subScores)) {
                         foreach ($eventMiscsData->subScores as $subScoreDTO) {
                             $subMatch = $this->em->getRepository(SubMatches::class)
@@ -173,36 +171,51 @@ class FonbetParserService
                                     'source_id' => $subScoreDTO->scoreIndex,
                                     'match' => $matchDB->getId(),
                                 ]);
-                            if(!$subMatch){
+                            if (!$subMatch) {
                                 $subMatch = new SubMatches();
                                 $subMatch->setSourceId($subScoreDTO->scoreIndex);
                                 $subMatch->setScore1($subScoreDTO->score1);
                                 $subMatch->setScore2($subScoreDTO->score2);
                                 $subMatch->setTitle($subScoreDTO->title);
                                 $subMatch->setMatch($matchDB);
-
                                 $this->em->persist($subMatch);
                             }
                         }
-                        #$this->em->flush();
+
                     }
+
 
                     $this->logger->info("Successfully processed event {$event->id}");
 
-                    $this->em->persist($matchDB);
+                    // Освобождаем объекты
+                    unset($event, $competitionData, $eventMiscsData, $tournamentDB, $team1DB, $team2DB, $matchDB, $subMatch, $subScoreDTO);
+
                     if (($i % $batchSize) === 0) {
                         $this->em->flush();
                         $this->em->clear();
+                        gc_collect_cycles();
+
+                        $this->logger->info("After flush and clear. Memory usage: " . round(memory_get_usage(true) / 1024 / 1024, 2) . " MB");
                     }
                     $i++;
-
                 } catch (\Throwable $e) {
                     $this->logger->error("Error processing event {$event->id}: " . $e->getMessage());
                     continue;
                 }
             }
-            $this->em->flush(); // остаток
+
+            $this->em->flush();
             $this->em->clear();
+            gc_collect_cycles();
+
+            foreach ($events as $key => $event) {
+                unset($events[$key]);
+            }
+            foreach ($competitions as $key => $competition) {
+                unset($competitions[$key]);
+            }
+            unset($data, $competitions, $events, $eventMiscs, $event, $competition);
+
             $this->logger->info("=== End saving matches to local DB ===");
         }
     }
@@ -221,6 +234,10 @@ class FonbetParserService
         }
 
         $data = $response->toArray();
+
+        $this->client->reset();
+        unset($response);
+
         if (!isset($data['sports'], $data['events'], $data['eventMiscs'], $data['competitions'])) {
             throw new \RuntimeException('Invalid data format from Fonbet');
         }
@@ -281,7 +298,7 @@ class FonbetParserService
                 if (preg_match('/bo\d+$/i', $name, $matches)) {
                     $matchFormat = $matches[0]; // bo3, bo2 и т.д.
                 } else {
-                    $matchFormat = null; // если формат не указан
+                    $matchFormat = "bo1"; // если формат не указан, по умолчанию best of 1
                 }
 
                 if (str_contains($name, "counter-strike")) {
